@@ -28,7 +28,6 @@
 
         </service>
 
-
         <receiver android:name="MyStartServiceReceiver" >
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

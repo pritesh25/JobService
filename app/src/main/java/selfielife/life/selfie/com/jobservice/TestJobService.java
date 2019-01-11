@@ -41,10 +41,15 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 
+import java.sql.Time;
 import java.text.DateFormat;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.TimeZone;
 
 import static java.security.AccessController.getContext;
 
@@ -55,10 +60,7 @@ import static java.security.AccessController.getContext;
 
 public class TestJobService extends JobService {
     //private static final String TAG = "SyncService";
-    private static final String TAG = TestJobService.class.getSimpleName() ;
-
-
-
+    private static final String TAG = TestJobService.class.getSimpleName();
 
     private FusedLocationProviderClient mFusedLocationClient;
     private SettingsClient mSettingsClient;
@@ -67,27 +69,26 @@ public class TestJobService extends JobService {
     private LocationCallback mLocationCallback;
     private Location mCurrentLocation;
 
-    private String                      mLastUpdateTime;
-    private Geocoder                    geocoder;
+    private String mLastUpdateTime;
+    private Geocoder geocoder;
     private List<Address> addresses;
-Context context;
-    private String                      IMEI,
+    Context context;
+    private String IMEI,
             simNo,
-            _latitude  ="0.0",
-            _longitude ="0.0",
-            address    = "unknown",
-            city       = "unknown",
-            state      = "unknown",
-            country    = "unknown",
+            _latitude = "0.0",
+            _longitude = "0.0",
+            address = "unknown",
+            city = "unknown",
+            state = "unknown",
+            country = "unknown",
             postalCode = "unknown";
 
-    public static final long   UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
-    public static final long   FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
-    public static final int    REQUEST_CHECK_SETTINGS = 100;
+    public static final long UPDATE_INTERVAL_IN_MILLISECONDS = 10000;
+    public static final long FASTEST_UPDATE_INTERVAL_IN_MILLISECONDS = 5000;
+    public static final int REQUEST_CHECK_SETTINGS = 100;
 
     @Override
     public boolean onStartJob(JobParameters params) {
-
 
         Intent service = new Intent(getApplicationContext(), MainActivity.class);
         getApplicationContext().startService(service);
@@ -101,17 +102,15 @@ Context context;
 
     @Override
     public boolean onStopJob(JobParameters params) {
-       // Util.scheduleJob(getApplicationContext());
+        // Util.scheduleJob(getApplicationContext());
 
         //true to indicate to the JobManager whether you'd like to reschedule this job based on the retry criteria provided at job creation-time;
         // or false to end the job entirely. Regardless of the value returned, your job must stop executing.
+        stopLocation();
         return true;
     }
 
-
-
-
-    //location function
+    //start location function
     private void initLocation() {
 
         geocoder = new Geocoder(getApplicationContext(), Locale.getDefault());
@@ -146,9 +145,10 @@ Context context;
     }
 
     private void startLocation() {
+
         mSettingsClient
                 .checkLocationSettings(mLocationSettingsRequest)
-                .addOnSuccessListener( new OnSuccessListener<LocationSettingsResponse>() {
+                .addOnSuccessListener(new OnSuccessListener<LocationSettingsResponse>() {
                     @SuppressLint("MissingPermission")
                     @Override
                     public void onSuccess(LocationSettingsResponse locationSettingsResponse) {
@@ -156,12 +156,12 @@ Context context;
                         Log.d(TAG, "Started location updates!");
 
                         //noinspection MissingPermission
-                        mFusedLocationClient.requestLocationUpdates(mLocationRequest,mLocationCallback, Looper.myLooper());
+                        mFusedLocationClient.requestLocationUpdates(mLocationRequest, mLocationCallback, Looper.myLooper());
 
                         updateLocation();
                     }
                 })
-                .addOnFailureListener( new OnFailureListener() {
+                .addOnFailureListener(new OnFailureListener() {
                     @Override
                     public void onFailure(@NonNull Exception e) {
                         int statusCode = ((ApiException) e).getStatusCode();
@@ -180,7 +180,7 @@ Context context;
                             case LocationSettingsStatusCodes.SETTINGS_CHANGE_UNAVAILABLE:
                                 String errorMessage = "Location settings are inadequate, and cannot be fixed here. Fix in Settings.";
                                 Log.e(TAG, errorMessage);
-                             //   Toasty.error(getContext(), errorMessage, Toast.LENGTH_LONG,true).show();
+                                //   Toasty.error(getContext(), errorMessage, Toast.LENGTH_LONG,true).show();
                         }
 
                         updateLocation();
@@ -188,39 +188,44 @@ Context context;
                 });
     }
 
-    private void updateLocation(){
+    private void updateLocation() {
         if (mCurrentLocation != null) {
 /*
             Log.d(TAG,"Lat: " + mCurrentLocation.getLatitude() + ", " +"Lng: " + mCurrentLocation.getLongitude());
             Log.d(TAG,"Last updated on: " + mLastUpdateTime);*/
 
-            _latitude    = String.valueOf(mCurrentLocation.getLatitude());
-            _longitude   = String.valueOf(mCurrentLocation.getLongitude());
+            _latitude = String.valueOf(mCurrentLocation.getLatitude());
+            _longitude = String.valueOf(mCurrentLocation.getLongitude());
 
             //MyConfiguration.setPreferences(context,PROFILE_LONGITUDE,_latitude);
-           // MyConfiguration.setPreferences(context,PROFILE_LATTITUDE,_longitude);
+            // MyConfiguration.setPreferences(context,PROFILE_LATTITUDE,_longitude);
+
+            formatDate(mCurrentLocation.getTime());
+
+            //Log.d(TAG,"Default TimeZone = "+TimeZone.getDefault().getID());
+            //Log.d(TAG,"TimeZone name    = "+TimeZone.getTimeZone(TimeZone.getDefault().getDisplayName()));
+            //TimeZone tz = TimeZone.getTimeZone("America/Los_Angeles");
 
          /*   Log.d(TAG,"_latitude    = "+_latitude);
             Log.d(TAG,"_longitude   = "+_longitude);
 */
-            try
-            {
+            try {
                 addresses = geocoder.getFromLocation(mCurrentLocation.getLatitude(), mCurrentLocation.getLongitude(), 1); // Here 1 represent max location result to returned, by documents it recommended 1 to 5
 
 
-                for(int i=0;i<addresses.size();i++){
+                for (int i = 0; i < addresses.size(); i++) {
 
-                    address      = addresses.get(i).getAddressLine(i); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
-                    city         = addresses.get(i).getLocality();
-                    state        = addresses.get(i).getAdminArea();
-                    country      = addresses.get(i).getCountryName();
-                    postalCode   = addresses.get(i).getPostalCode();
+                    address = addresses.get(i).getAddressLine(i); // If any additional address line present than only, check with max available address lines by getMaxAddressLineIndex()
+                    city = addresses.get(i).getLocality();
+                    state = addresses.get(i).getAdminArea();
+                    country = addresses.get(i).getCountryName();
+                    postalCode = addresses.get(i).getPostalCode();
 
-                    Log.d(TAG,i+" address      = "+address);
-                    Log.d(TAG,i+"city         = "+city);
-                    Log.d(TAG,i+"state        = "+state);
-                    Log.d(TAG,i+"country      = "+country);
-                    Log.d(TAG,i+"postalCode   = "+postalCode);
+                    Log.d(TAG, i + " address      = " + address);
+                    Log.d(TAG, i + "city         = " + city);
+                    Log.d(TAG, i + "state        = " + state);
+                    Log.d(TAG, i + "country      = " + country);
+                    Log.d(TAG, i + "postalCode   = " + postalCode);
 
                 }
 
@@ -236,12 +241,10 @@ Context context;
 //                Log.d(TAG,"country      = "+country);
 //                Log.d(TAG,"postalCode   = "+postalCode);
 
-             //   MyConfiguration.setPreferences(context,PROFILE_LOCATION,country);
+                //   MyConfiguration.setPreferences(context,PROFILE_LOCATION,country);
 
-            }
-            catch (Exception e)
-            {
-                Log.d(TAG,"(updateLocation) catch error = "+ e.getMessage());
+            } catch (Exception e) {
+                Log.d(TAG, "(updateLocation) catch error = " + e.getMessage());
             }
 
         }
@@ -249,26 +252,42 @@ Context context;
     }
 
     public void stopLocation() {
-        try
-        {
+        try {
             // Removing location updates
             mFusedLocationClient
                     .removeLocationUpdates(mLocationCallback)
                     .addOnCompleteListener((Activity) getApplicationContext(), new OnCompleteListener<Void>() {
                         @Override
                         public void onComplete(@NonNull Task<Void> task) {
-                            Log.d(TAG,"Location updates stopped!");
+                            Log.d(TAG, "Location updates stopped!");
                             //Toast.makeText(getApplicationContext(), "Location updates stopped!", Toast.LENGTH_SHORT).show();
 
 
                         }
                     });
-        }
-        catch (Exception e)
-        {
-            Log.d(TAG,"(stopLocation) catch error = "+e.getMessage().toString());
+        } catch (Exception e) {
+            Log.d(TAG, "(stopLocation) catch error = " + e.getMessage().toString());
         }
     }
+    //end location function
+
+    private void formatDate(long milliseconds) /* This is your topStory.getTime()*1000 */ {
+
+        Log.d(TAG, "\n\n  **************************** \n\n");
+
+        Calendar cal = Calendar.getInstance();
+        TimeZone tz = cal.getTimeZone();
+        Log.d(TAG, "Time zone 1 =" + tz.getDisplayName());
+        Log.d(TAG, "Time zone 2 =" + cal.getTimeZone());
+        Log.d(TAG, "Time zone 3 =" + TimeZone.getDefault().getID());
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+        sdf.setTimeZone(tz);
+        String localTime = sdf.format(new Date(mCurrentLocation.getTime())); // I assume your timestamp is in seconds and you're converting to milliseconds?
+        Log.d("final Time: ", localTime);
+
+
+    }
+
 
 
 }
